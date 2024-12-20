@@ -1,37 +1,94 @@
-# Système de Monitoring Météo
+# Système de Monitoring Météo 🌡️
 
-Ce système se compose de deux parties principales :
-1. Un client sur Raspberry Pi qui lit les données d'un capteur DHT11
-2. Un serveur API qui stocke et expose les données
+<div align="center">
 
-## 1. Installation Côté Serveur (VPS)
+[![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![Actix](https://img.shields.io/badge/actix-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)](https://actix.rs/)
+[![MariaDB](https://img.shields.io/badge/MariaDB-003545?style=for-the-badge&logo=mariadb&logoColor=white)](https://mariadb.org/)
+[![Nginx](https://img.shields.io/badge/nginx-%23009639.svg?style=for-the-badge&logo=nginx&logoColor=white)](https://nginx.org/)
+[![Raspberry Pi](https://img.shields.io/badge/-RaspberryPi-C51A4A?style=for-the-badge&logo=Raspberry-Pi)](https://www.raspberrypi.org/)
 
-### Prérequis
+Un système de monitoring météorologique moderne alliant performance et fiabilité
+
+[🚀 Installation](#-installation) •
+[📖 Documentation](#-documentation) •
+[🛠️ Configuration](#%EF%B8%8F-configuration) •
+[🤝 Contribution](#-contribution)
+
+</div>
+
+## 📑 Table des matières
+
+- [🌟 Caractéristiques](#-caractéristiques)
+- [🏗️ Architecture](#%EF%B8%8F-architecture)
+- [🚀 Installation](#-installation)
+- [⚙️ Configuration](#%EF%B8%8F-configuration)
+- [📡 API Reference](#-api-reference)
+- [🔧 Maintenance](#-maintenance)
+- [💻 Développement](#-développement)
+- [🐛 Dépannage](#-dépannage)
+
+## 🌟 Caractéristiques
+
+- **Performance Optimale**
+  - ⚡ Backend ultra-rapide en Rust
+  - 🔄 Traitement asynchrone des requêtes
+  - 📊 Mise en cache optimisée
+
+- **Surveillance Complète**
+  - 📈 Monitoring en temps réel
+  - 🌡️ Mesures de température précises
+  - 💧 Suivi de l'humidité
+  - 📍 Support multi-localisation
+
+- **Sécurité**
+  - 🔒 Système de permissions granulaire
+  - 🛡️ Protection contre les attaques DDOS
+  - 🔐 Chiffrement des communications
+
+## 🏗️ Architecture
+
+```mermaid
+graph TD
+    A[Capteur DHT11] -->|Données brutes| B[Raspberry Pi Client]
+    B -->|HTTP POST| C[API Rust]
+    C -->|Stockage| D[(MariaDB)]
+    C -->|Monitoring| E[Monit]
+    F[Nginx] -->|Reverse Proxy| C
+```
+
+## 🚀 Installation
+
+### Prérequis Système
+
 ```bash
 # Mise à jour du système
-sudo apt-get update && sudo apt-get upgrade
+sudo apt update && sudo apt upgrade -y
 
 # Installation des dépendances
-sudo apt-get install -y \
+sudo apt install -y \
     pkg-config \
     libssl-dev \
     mariadb-server \
     nginx \
-    monit
+    monit \
+    build-essential \
+    git
 ```
 
-### Configuration de la Base de Données
+### Base de données
+
 ```sql
-# Connexion à MariaDB
+-- Connexion à MariaDB
 sudo mysql -u root -p
 
-# Création de la base et de l'utilisateur
+-- Création de la base et des privilèges
 CREATE DATABASE meteo_db;
-CREATE USER '<db_name>'@'localhost' IDENTIFIED BY 'votre_mot_de_passe';
+CREATE USER '<db_name>'@'localhost' IDENTIFIED BY '<password>';
 GRANT ALL PRIVILEGES ON meteo_db.* TO '<db_name>'@'localhost';
 FLUSH PRIVILEGES;
 
-# Création de la table
+-- Structure de la base
 USE meteo_db;
 CREATE TABLE measurements (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -42,245 +99,201 @@ CREATE TABLE measurements (
 );
 ```
 
-### Installation du Serveur API
+### Installation du Serveur
 
-1. Structure des répertoires :
 ```bash
-sudo mkdir -p /opt/meteo-server
-sudo useradd -r -s /bin/false meteo
+# Clone du repository
+git clone https://github.com/LukaChassaing/meteo_api_server.git
+cd meteo-monitoring
+
+# Compilation
+cargo build --release
+
+# Installation
+sudo ./install.sh
 ```
 
-2. Configuration :
-```bash
-# Fichier de configuration
-sudo nano /opt/meteo-server/config.env
-```
+## ⚙️ Configuration
+
+### Variables d'Environnement
+
 ```env
-DATABASE_URL=mysql://<db_name>:votre_mot_de_passe@localhost/meteo_db
-PORT=<meteo_api_server_port>
+# /opt/meteo-server/config.env
+DATABASE_URL=mysql://<db_name>:<password>@localhost/meteo_db
+PORT=<port>
 RUST_LOG=info
 ```
 
-3. Script de démarrage :
-```bash
-sudo nano /opt/meteo-server/start.sh
-```
-```bash
-#!/bin/bash
-mkdir -p /run/meteo-server
-chown meteo:meteo /run/meteo-server
-exec /opt/meteo-server/meteo_api_server
-```
-```bash
-sudo chmod +x /opt/meteo-server/start.sh
+### Configuration Nginx
+
+```nginx
+# /etc/nginx/sites-available/meteo-server
+server {
+    listen 80;
+    server_name meteo.votredomaine.com;
+
+    location / {
+        proxy_pass http://localhost:<port>;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
 ```
 
-4. Service Systemd :
-```bash
-sudo nano /etc/systemd/system/meteo-server.service
-```
-```ini
-[Unit]
-Description=Meteo API Server
-After=network.target mysql.service
-Requires=mysql.service
-
-[Service]
-Type=simple
-User=meteo
-Group=meteo
-EnvironmentFile=/opt/meteo-server/config.env
-WorkingDirectory=/opt/meteo-server
-ExecStart=/opt/meteo-server/start.sh
-Restart=always
-RestartSec=5
-StartLimitIntervalSec=0
-PIDFile=/run/meteo-server/meteo-server.pid
-
-[Install]
-WantedBy=multi-user.target
-```
-
-5. Configuration Monit :
-```bash
-sudo nano /etc/monit/monitrc
-```
-```text
-set httpd port 2812
-    use address localhost
-    allow localhost
-    allow admin:votre_mot_de_passe
-```
+### Configuration Monit
 
 ```bash
-sudo nano /etc/monit/conf.d/meteo-server
-```
-```text
-check process meteo-server with pidfile /run/meteo-server/meteo-server.pid
+# /etc/monit/conf.d/meteo-server
+check process meteo-server with pidfile /var/run/meteo-server.pid
     start program = "/bin/systemctl start meteo-server"
     stop program = "/bin/systemctl stop meteo-server"
-    
-    if failed host localhost port <meteo_api_server_port> protocol http
+    if failed host localhost port <port> protocol http
         and request "/measurements"
         with timeout 10 seconds
         then restart
-    
-    if cpu usage > 95% for 10 cycles then alert
-    if memory usage > 80% then restart
-    if 5 restarts within 5 cycles then timeout
 ```
 
-### Commandes Utiles Serveur
+## 📡 API Reference
+
+### Endpoints disponibles
+
+| Méthode | Endpoint | Description | Authentification |
+|---------|----------|-------------|------------------|
+| POST | `/push-measures` | Envoie de nouvelles mesures | ✅ |
+| GET | `/measurements` | Liste toutes les mesures | ❌ |
+| GET | `/measurements/{location}` | Mesures par localisation | ❌ |
+| GET | `/stats` | Statistiques globales | ❌ |
+
+### Exemples d'utilisation
+
+#### Envoi de mesures
+
 ```bash
-# Démarrer les services
-sudo systemctl start mariadb
-sudo systemctl start meteo-server
-sudo systemctl start monit
-
-# Activer au démarrage
-sudo systemctl enable mariadb
-sudo systemctl enable meteo-server
-sudo systemctl enable monit
-
-# Vérifier les statuts
-sudo systemctl status meteo-server
-sudo monit status
-
-# Voir les logs
-sudo journalctl -u meteo-server -f
-```
-
-## 2. Installation Côté Raspberry Pi
-
-### Prérequis
-```bash
-# Mise à jour du système
-sudo apt-get update && sudo apt-get upgrade
-
-# Installation des dépendances
-sudo apt-get install -y \
-    pkg-config \
-    libssl-dev
-```
-
-### Configuration DHT11
-1. Branchement physique :
-- VCC → 3.3V (Pin 1)
-- DATA → GPIO4 (Pin 7)
-- GND → Ground (Pin 6)
-- Résistance pull-up 10kΩ entre VCC et DATA
-
-2. Configuration du client :
-```bash
-sudo mkdir -p /opt/dht11
-sudo nano /opt/dht11/config.env
-```
-```env
-SERVER_URL=http://votre.serveur:<meteo_api_server_port>
-SENSOR_LOCATION=interior
-READ_INTERVAL_SECS=60
-```
-
-3. Service Systemd :
-```bash
-sudo nano /etc/systemd/system/dht11.service
-```
-```ini
-[Unit]
-Description=DHT11 Temperature and Humidity Monitor
-After=network.target
-StartLimitIntervalSec=0
-
-[Service]
-Type=simple
-User=root
-EnvironmentFile=/opt/dht11/config.env
-WorkingDirectory=/opt/dht11
-ExecStart=/opt/dht11/dht11_client
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### Commandes Utiles Raspberry Pi
-```bash
-# Démarrer le service
-sudo systemctl start dht11
-
-# Activer au démarrage
-sudo systemctl enable dht11
-
-# Vérifier le statut
-sudo systemctl status dht11
-
-# Voir les logs
-sudo journalctl -u dht11 -f
-```
-
-## 3. API Endpoints
-
-- `POST /push-measures` : Envoyer des mesures
-- `GET /measurements` : Récupérer toutes les mesures
-- `GET /measurements/{location}` : Récupérer les mesures par location
-- `GET /stats` : Obtenir les statistiques
-
-### Exemple de Requête
-```bash
-# Envoi de mesures
-curl -X POST http://localhost:<meteo_api_server_port>/push-measures \
+curl -X POST http://localhost:<port>/push-measures \
   -H "Content-Type: application/json" \
   -d '{
-    "temperature": {"value": 23.5, "unit": "°C"},
-    "humidity": {"value": 65.0, "unit": "%"},
+    "temperature": {
+      "value": 23.5,
+      "unit": "°C"
+    },
+    "humidity": {
+      "value": 65.0,
+      "unit": "%"
+    },
     "location": "interior"
   }'
 ```
 
-## 4. Maintenance
+#### Récupération des statistiques
 
-### Sauvegardes
 ```bash
-# Sauvegarde de la base de données
-mysqldump -u root -p meteo_db > backup.sql
+curl http://localhost:<port>/stats
 ```
 
-### Surveillance
-- Interface Monit : http://localhost:2812
-- Logs système : `sudo journalctl -u meteo-server -f`
-- Logs Nginx : `sudo tail -f /var/log/nginx/access.log`
+## 🔧 Maintenance
 
-### Redémarrage des Services
+### Commandes Essentielles
+
 ```bash
-# Côté serveur
-sudo systemctl restart meteo-server
-sudo systemctl restart monit
-sudo systemctl restart mariadb
+# Statut des services
+sudo systemctl status meteo-server
+sudo systemctl status nginx
+sudo monit status
 
-# Côté Raspberry Pi
-sudo systemctl restart dht11
-```
-
-## 5. Dépannage
-
-1. Vérification des logs :
-```bash
-# Logs serveur
+# Logs
 sudo journalctl -u meteo-server -f
-# Logs client
-sudo journalctl -u dht11 -f
+sudo tail -f /var/log/nginx/error.log
+
+# Backup de la base
+mysqldump -u root -p meteo_db > backup_$(date +%Y%m%d).sql
 ```
 
-2. Vérification des connexions :
+### Tâches de Maintenance Régulières
+
+| Période | Action | Commande |
+|---------|--------|----------|
+| Quotidien | Vérification des logs | `sudo journalctl -u meteo-server --since "24h ago"` |
+| Hebdomadaire | Backup base de données | `mysqldump -u root -p meteo_db > backup.sql` |
+| Mensuel | Purge des anciennes données | `mysql -u root -p meteo_db < cleanup.sql` |
+
+## 💻 Développement
+
+### Structure du Projet
+
+```
+meteo-monitoring/
+├── src/
+│   ├── main.rs         # Point d'entrée
+│   ├── models.rs       # Modèles de données
+│   ├── handlers.rs     # Gestionnaires de routes
+│   └── db.rs          # Interactions base de données
+├── config/
+│   ├── nginx/         # Configuration Nginx
+│   └── monit/         # Configuration Monit
+└── scripts/
+    ├── install.sh     # Script d'installation
+    └── backup.sh      # Script de sauvegarde
+```
+
+### Tests
+
 ```bash
-# Test du port serveur
-nc -zv localhost <meteo_api_server_port>
-# Test de la base de données
-mysql -u <db_name> -p meteo_db
+# Tests unitaires
+cargo test
+
+# Tests d'intégration
+cargo test --test '*'
+
+# Benchmarks
+cargo bench
 ```
 
-3. Problèmes courants :
-- Erreur "Permission denied" : Vérifier les permissions des répertoires
-- Erreur de connexion : Vérifier la configuration réseau
-- Erreur de lecture DHT11 : Vérifier le câblage et la résistance pull-up
+## 🐛 Dépannage
+
+### Problèmes Courants
+
+| Problème | Cause Possible | Solution |
+|----------|----------------|----------|
+| `Connection refused` | Service non démarré | `sudo systemctl start meteo-server` |
+| `Permission denied` | Droits insuffisants | `sudo chown -R meteo:meteo /opt/meteo-server` |
+| Erreurs DHT11 | Câblage incorrect | Vérifier les connexions GPIO |
+
+### Outils de Diagnostic
+
+```bash
+# Vérification réseau
+netstat -tulpn | grep meteo-server
+
+# Test de la base de données
+mysqlshow -u <db_name> -p meteo_db
+
+# Surveillance ressources
+htop
+```
+
+## 🤝 Contribution
+
+Nous accueillons toutes les contributions ! Voici comment participer :
+
+1. Forkez le projet
+2. Créez votre branche (`git checkout -b feature/AmazingFeature`)
+3. Committez vos changements (`git commit -m 'Add AmazingFeature'`)
+4. Pushez sur la branche (`git push origin feature/AmazingFeature`)
+5. Ouvrez une Pull Request
+
+## 📄 Licence
+
+Ce projet est sous licence [GNU GPL v3](LICENSE).
+
+---
+
+<div align="center">
+
+**[⬆ Retour en haut](#système-de-monitoring-météo-️)**
+
+Fait avec ❤️ par Luka Chassaing
+
+</div>
