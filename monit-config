@@ -1,0 +1,11 @@
+# /etc/monit/conf.d/meteo-server
+check process meteo-server with pidfile /var/run/meteo-server.pid
+    start program = "/bin/systemctl start meteo-server"
+    stop program = "/bin/systemctl stop meteo-server"
+    if failed host localhost port <meteo_api_server_port> protocol http
+        and request "/measurements"
+        with timeout 10 seconds
+        then restart
+    if 5 restarts within 5 cycles then timeout
+    if cpu usage > 95% for 10 cycles then alert
+    if memory usage > 80% then restart

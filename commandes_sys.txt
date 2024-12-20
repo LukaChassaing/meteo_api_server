@@ -1,0 +1,6 @@
+# Pour installer pkg-config et les dépendances OpenSSL
+sudo apt-get update
+sudo apt-get install pkg-config libssl-dev
+
+# Si vous utilisez une distribution basée sur RHEL/CentOS/Fedora, utilisez plutôt :
+# sudo dnf install pkg-config openssl-devel

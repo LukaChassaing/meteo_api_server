@@ -1,0 +1,27 @@
+-- Créer la base de données
+CREATE DATABASE meteo_db;
+
+-- Créer l'utilisateur avec un mot de passe
+CREATE USER '<db_name>'@'localhost' IDENTIFIED BY '<sql_username>';
+
+-- Donner les permissions à l'utilisateur
+GRANT ALL PRIVILEGES ON meteo_db.* TO '<db_name>'@'localhost';
+
+-- Rafraîchir les privilèges
+FLUSH PRIVILEGES;
+
+-- Utiliser la base de données
+USE meteo_db;
+
+-- Créer la table pour les mesures
+CREATE TABLE measurements (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    temperature FLOAT NOT NULL,
+    humidity FLOAT NOT NULL,
+    timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+
+ALTER TABLE measurements 
+ADD COLUMN location VARCHAR(50) NOT NULL DEFAULT 'interior' 
+AFTER timestamp;
